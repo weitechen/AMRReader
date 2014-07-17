@@ -8,6 +8,128 @@ class TestExpression(unittest.TestCase):
 	def setUp(self):
 		pass
 
+	def testTraverse(self):
+		inputString1 = '(k / name :op1 "Kent")'
+		concept1 = Concept.parse(inputString1)
+		nodeGenerator = concept1.traverse()
+		node0 = nodeGenerator.next()
+		self.assertEqual(node0[0], "op1")
+		self.assertEqual(node0[1], '"Kent"')
+		self.assertFalse(node0[2])
+		node1 = nodeGenerator.next()
+		self.assertEqual(node1[0], None)
+		self.assertEqual(node1[1].name, "name")
+		self.assertTrue(node1[2])
+		self.assertRaises(StopIteration, nodeGenerator.next)
+
+		inputString2 = '(h / have-concession-91\
+		      :ARG1 (a3 / and\
+		            :op1 (d2 / do-02\
+		                  :ARG0 p5\
+		                  :ARG1 (n / nothing)\
+		                  :mod (o2 / only :polarity -))\
+		            :op2 (r / respond-01\
+		                  :ARG0 p5\
+		                  :ARG1 (t4 / thing\
+		                        :ARG2-of (q / query-01\
+		                              :ARG0 (p4 / public)))\
+				))\
+		      :ARG2 (d / do-02\
+		            :ARG0 (p5 / political-party :name (n2 / name :op1 "CCP"))\
+		            ))'
+
+		concept2 = Concept.parse(inputString2)
+
+		nodeGenerator = concept2.traverse()
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "ARG0")
+		self.assertEqual(node[1].name, "political-party")
+		self.assertFalse(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "ARG1")
+		self.assertEqual(node[1].name, "nothing")
+		self.assertFalse(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "polarity")
+		self.assertEqual(node[1], "-")
+		self.assertFalse(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "mod")
+		self.assertEqual(node[1].name, "only")
+		self.assertTrue(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "op1")
+		self.assertEqual(node[1].name, "do-02")
+		self.assertTrue(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "ARG0")
+		self.assertEqual(node[1].name, "political-party")
+		self.assertFalse(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "ARG0")
+		self.assertEqual(node[1].name, "public")
+		self.assertFalse(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "ARG2-of")
+		self.assertEqual(node[1].name, "query-01")
+		self.assertTrue(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "ARG1")
+		self.assertEqual(node[1].name, "thing")
+		self.assertTrue(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "op2")
+		self.assertEqual(node[1].name, "respond-01")
+		self.assertTrue(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "ARG1")
+		self.assertEqual(node[1].name, "and")
+		self.assertTrue(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "op1")
+		self.assertEqual(node[1], "\"CCP\"")
+		self.assertFalse(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "name")
+		self.assertEqual(node[1].name, "name")
+		self.assertTrue(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "ARG0")
+		self.assertEqual(node[1].name, "political-party")
+		self.assertTrue(node[2])
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], "ARG2")
+		self.assertEqual(node[1].name, "do-02")
+		self.assertTrue(node[2])
+
+		node = nodeGenerator.next()
+		self.assertEqual(node[0], None)
+		self.assertEqual(node[1].name, "have-concession-91")
+		self.assertTrue(node[2])
+		self.assertRaises(StopIteration, nodeGenerator.next)
+
+	def testToString(self):
+		inputString1 = '(k / name :op1 "Kent")'
+		concept1 = Concept.parse(inputString1)
+		self.assertEqual(inputString1, concept1.toString().replace("\t", "").replace("\n", " "))
+
+		inputString2 = '(h / have-concession-91\
+	:ARG1 (a3 / and\
+	:op1 (d2 / do-02\
+		 :ARG0 p5\
+		 :ARG1 (n / nothing)\
+		 :mod (o2 / only :polarity -))\
+		 :op2 (r / respond-01\
+		 :ARG0 p5\
+		 :ARG1 (t4 / thing\
+		 :ARG2-of (q / query-01\
+		 :ARG0 (p4 / public)))\
+				))\
+		 :ARG2 (d / do-02\
+		 :ARG0 (p5 / political-party :name (n2 / name :op1 "CCP"))))'
+		concept2 = Concept.parse(inputString2)
+		self.assertEqual(inputString2.replace("\t", "").replace("\n", "").replace(" :", ":"), concept2.toString().replace("\t", "").replace("\n", ""))
+		
 	def testConcept(self):
 		concept = Concept("r", "realize-01")
 		self.assertEqual(concept.var, "r")

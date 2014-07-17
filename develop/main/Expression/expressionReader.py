@@ -66,32 +66,12 @@ class ISIReader(object):
 		return expression
 
 if __name__=="__main__":
-	fhd = open("../../../data/amr-bank.txt", "r")
-	#fhd = open("/net/data/LDC/AMR_Annotation_Release_1.0_LDC2014T12/amr_anno_1.0/data/unsplit/amr-release-1.0-consensus.txt", "r")
-	startAMR = False
-	amrString = ""
-	idx = 0
-	amrIdx = 0
-	for line in fhd.xreadlines():
-		amrIdx += 1
-		if line[0] == "#":
-			continue
-		if not startAMR and line[0] == "(":
-			startAMR = True
-			idx += 1
+	reader = ISIReader("../../../data/amrSample.txt")
+	reader.reading()
 
-		if startAMR:
-			if line.strip() == "":
-				startAMR = False
-				try:
-					expression = Expression.parse(amrString.strip())
-				except:
-					print amrString
-					print "%d: Ln:%d" % (idx, amrIdx)
-					raise
-				
-				amrString = ""
-			else:
-				amrString += line
+
+	for AMR in reader.amrRepository:
+		print AMR.expression.toString()
+		print ""
 
 	print "done"

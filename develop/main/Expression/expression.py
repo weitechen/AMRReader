@@ -1,7 +1,8 @@
 import re
 
-class Concept:
+class Concept(object):
 	varMatchPattern = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
+	_traverseLevel = 0
 	def __init__(self, var, name, parentConcept = None):
 		self.var = var
 		self.name = name
@@ -121,7 +122,6 @@ class Concept:
 					# string -> add
 					rConcept.addRelation(relationName, value)
 
-				
 		while idx < len(parsingString):
 			tChar = parsingString[idx]
 
@@ -313,6 +313,55 @@ class Concept:
 
 		return rVars
 
+	def traverse(self, callerConcept = None):
+		Concept._traverseLevel += 1
+		for relationName in self.relations:
+			value = self.relations[relationName]
+
+			if not isinstance(value, list):
+				value = [value]
+
+			for subValue in value:
+				traverseChild = True
+				if isinstance(subValue, Concept):
+					
+					if not isinstance(subValue.parent, list) or (subValue.parent[0] == self):
+						traverseChild = False
+						for childValue in subValue.traverse(self):
+							traverseChild = True
+							yield childValue
+					else:
+						traverseChild = False
+					yield (relationName, subValue, traverseChild)
+				else:
+					yield (relationName, str(subValue), False)
+		Concept._traverseLevel -= 1
+		if self.parent == None:
+			yield (None, self, True )
+		
+	def toString(self, callerConcept = None):
+		rStr = self.var
+
+		Concept._traverseLevel += 1
+		if not isinstance(self.parent, list) or self.parent[0] == callerConcept:
+			rStr = "(" + rStr + " / %s" % (self.name)
+			
+			for relationName in self.relations:
+				value = self.relations[relationName]
+				rStr += "\n" + "\t"*Concept._traverseLevel + ":%s " % (relationName)
+				if not isinstance(value, list):
+					value = [value]
+	
+				for subValue in value:
+					if isinstance(subValue, Concept):
+						rStr += subValue.toString(self)
+					else:
+						rStr += str(subValue)
+			rStr += ")"
+		Concept._traverseLevel -= 1
+
+		return rStr
+			
 class EmptyConcept(Concept):
 	pass
 
