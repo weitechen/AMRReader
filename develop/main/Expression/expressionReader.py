@@ -7,7 +7,8 @@ class AMR(object):
 		self.sent = None
 		self.zhSent = None
 		self.expression = None
-		self.alignment = None
+		self.alignments = None
+		self.tokenized = None
 
 class ISIReader(object):
 	"""
@@ -39,6 +40,10 @@ class ISIReader(object):
 									currentAMR.sent = reduce(lambda x,y: x+ " " + y, separatedTerm[1:])
 								elif separatedTerm[0] == "zh":
 									currentAMR.zhSent = reduce(lambda x,y: x+ " " + y, separatedTerm[1:])
+								elif separatedTerm[0] == "tok":
+									currentAMR.tokenized = reduce(lambda x,y: x+ " " + y, separatedTerm[1:])
+								elif separatedTerm[0] == "alignments":
+									currentAMR.alignments = reduce(lambda x,y: x+ " " + y, separatedTerm[1:])
 					continue
 				
 				if startAMR and line.strip() == "":
@@ -66,12 +71,14 @@ class ISIReader(object):
 		return expression
 
 if __name__=="__main__":
-	reader = ISIReader("../../../data/amrSample.txt")
+	reader = ISIReader("/home/verbs/student/wech5560/Source/jamr/data/amr-release-proxy.dev.aligned")
+	#reader = ISIReader("/home/verbs/student/wech5560/data/amr/amr-bank.txt")
 	reader.reading()
 
-
 	for AMR in reader.amrRepository:
-		print AMR.expression.toString()
-		print ""
+		#print AMR.alignments
+		#print AMR.tokenized
+		#print ""
+		pass
 
 	print "done"

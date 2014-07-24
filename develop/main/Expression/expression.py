@@ -1,4 +1,5 @@
 import re
+import sys
 
 class Concept(object):
 	varMatchPattern = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
@@ -7,6 +8,8 @@ class Concept(object):
 		self.var = var
 		self.name = name
 		self.relations = {}
+		self.relationLabel = []
+		self.relationLabelIdx = []
 		self.parent = parentConcept
 		self.conceptTable = {}
 	
@@ -31,15 +34,18 @@ class Concept(object):
 		"""
 		Add relation (child) Concept or Property
 		"""
+		labelIdx = 0
 		if relName in self.relations:
 			if isinstance(self.relations[relName], list):
 				self.relations[relName].append(addValue)
 			else:
 				self.relations[relName] = [self.relations[relName], addValue]
-			#else:
-			#	raise Exception("relation name `" + relName + "' conflict under Concept `" + self.name + "'")
+			labelIdx = len(self.relations[relName]) - 1
 		else:
 			self.relations[relName] = addValue
+
+		self.relationLabel.append(relName)
+		self.relationLabelIdx.append(labelIdx)
 
 		# update root concept table
 		if isinstance(addValue, Concept):
@@ -54,6 +60,11 @@ class Concept(object):
 						for tRelName in emptyConcept.getParent().relations:
 							if emptyConcept.getParent().relations[tRelName] == emptyConcept:
 								emptyConcept.parent.relations[tRelName] = addValue
+								addValue.addParent(emptyConcept.parent)
+							elif isinstance(emptyConcept.getParent().relations[tRelName], list):
+								for (tIdx, ttConcept) in enumerate(emptyConcept.getParent().relations[tRelName]):
+									if ttConcept == emptyConcept:
+										emptyConcept.getParent().relations[tRelName][tIdx] = addValue
 								addValue.addParent(emptyConcept.parent)
 					rootConcept.conceptTable[addValue.var] = addValue
 				else:
@@ -313,28 +324,63 @@ class Concept(object):
 
 		return rVars
 
+	def getConceptFromIdxList(self, idxList):
+		if isinstance(idxList, str):
+			idxList = [int(i) for i in idxList.split(".")]
+
+		if len(idxList) == 0:
+			raise Exception("Wrong Index List %s" % str(idxList))
+
+		if self.parent == None:
+			if len(idxList) == 1:
+				if idxList[0] != 0:
+					raise Exception("Wrong Index List %s" % str(idxList))
+				return self
+			else:
+				idxList = idxList[1:]
+
+		try:
+			currentIdx = idxList[0]
+			relLabel = self.relationLabel[currentIdx]
+
+			nextConcept = None
+			if isinstance(self.relations[relLabel], list):
+				labelIdx = self.relationLabelIdx[currentIdx]
+				nextConcept = self.relations[relLabel][labelIdx]
+			elif isinstance(self.relations[relLabel], Concept):
+				nextConcept = self.relations[relLabel]
+			else:
+				raise Exception("Item in relation table is neither list nor Concept: %s" % str(self.relations[relLabel]))
+		except KeyError:
+			raise Exception("Find Concept error in relation: %s" % str(idxList))
+		except:
+			exc_info = sys.exc_info()
+			raise exc_info[0], exc_info[1], exc_info[2]
+		if len(idxList) == 1:
+			return nextConcept
+		else:
+			return nextConcept.getConceptFromIdxList(idxList[1:])
+
 	def traverse(self, callerConcept = None):
 		Concept._traverseLevel += 1
-		for relationName in self.relations:
-			value = self.relations[relationName]
+		#for relationName in self.relations:
+		for (relIdx, relationName) in enumerate(self.relationLabel):
 
-			if not isinstance(value, list):
-				value = [value]
+			labelIdx = self.relationLabelIdx[relIdx]
+			value = self.relations[relationName][labelIdx] if isinstance(self.relations[relationName], list) else self.relations[relationName]
 
-			for subValue in value:
-				traverseChild = True
-				if isinstance(subValue, Concept):
-					
-					if not isinstance(subValue.parent, list) or (subValue.parent[0] == self):
-						traverseChild = False
-						for childValue in subValue.traverse(self):
-							traverseChild = True
-							yield childValue
-					else:
-						traverseChild = False
-					yield (relationName, subValue, traverseChild)
+			traverseChild = True
+			if isinstance(value, Concept):
+				if not isinstance(value.parent, list) or (value.parent[0] == self):
+					traverseChild = False
+					for childValue in value.traverse(self):
+						traverseChild = True
+						yield childValue
 				else:
-					yield (relationName, str(subValue), False)
+					traverseChild = False
+				yield (relationName, value, traverseChild)
+			else:
+				yield (relationName, str(value), False)
 		Concept._traverseLevel -= 1
 		if self.parent == None:
 			yield (None, self, True )
@@ -346,17 +392,15 @@ class Concept(object):
 		if not isinstance(self.parent, list) or self.parent[0] == callerConcept:
 			rStr = "(" + rStr + " / %s" % (self.name)
 			
-			for relationName in self.relations:
-				value = self.relations[relationName]
+			#for relationName in self.relations:
+			for (relIdx, relationName) in enumerate(self.relationLabel):
+				labelIdx = self.relationLabelIdx[relIdx]
+				value = self.relations[relationName][labelIdx] if isinstance(self.relations[relationName], list) else self.relations[relationName]
 				rStr += "\n" + "\t"*Concept._traverseLevel + ":%s " % (relationName)
-				if not isinstance(value, list):
-					value = [value]
-	
-				for subValue in value:
-					if isinstance(subValue, Concept):
-						rStr += subValue.toString(self)
-					else:
-						rStr += str(subValue)
+				if isinstance(value, Concept):
+					rStr += value.toString(self)
+				else:
+					rStr += str(value)
 			rStr += ")"
 		Concept._traverseLevel -= 1
 
