@@ -1,18 +1,27 @@
 import re
 import sys
+from sets import Set
 
 class Concept(object):
 	varMatchPattern = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
 	_traverseLevel = 0
 	def __init__(self, var, name, parentConcept = None):
+		self.conceptIdx = -1
 		self.var = var
 		self.name = name
 		self.relations = {}
 		self.relationLabel = []
 		self.relationLabelIdx = []
+		self.relationLabelIsReentrance = []
 		self.parent = parentConcept
 		self.conceptTable = {}
+		self.isInversed = False
 	
+	def setConceptIdx(self, conceptIdx):
+		if self.conceptIdx != -1:
+			raise Exception("Concept ID has been setted multiple times: %s" % self.name)
+		self.conceptIdx = conceptIdx
+
 	def _setParent(self, parent):
 		"""
 		Set the parent Concept
@@ -22,7 +31,7 @@ class Concept(object):
 	def addParent(self, parent):
 		if not isinstance(self.parent, list):
 			self.parent = [self.parent]
-		
+
 		self.parent.append(parent)
 
 	def getParent(self, parentIdx = 0):
@@ -46,15 +55,22 @@ class Concept(object):
 
 		self.relationLabel.append(relName)
 		self.relationLabelIdx.append(labelIdx)
+		self.relationLabelIsReentrance.append(False)
 
 		# update root concept table
 		if isinstance(addValue, Concept):
 			rootConcept = self
+
 			while rootConcept.getParent() != None:
 				rootConcept = rootConcept.getParent()
+
 			if addValue.var in rootConcept.conceptTable:
+				# already in concept table
+				#  -> new concept is still emptyConcept -> just append
+				#  -> new concept is not emptyConcept -> update all old emptyConcpet in concept table, update their parent
 				if isinstance(addValue, EmptyConcept):
 					rootConcept.conceptTable[addValue.var].append(addValue)
+					self.relationLabelIsReentrance[-1] = True
 				elif isinstance(rootConcept.conceptTable[addValue.var], list):
 					for emptyConcept in rootConcept.conceptTable[addValue.var]:
 						for tRelName in emptyConcept.getParent().relations:
@@ -68,11 +84,15 @@ class Concept(object):
 								addValue.addParent(emptyConcept.parent)
 					rootConcept.conceptTable[addValue.var] = addValue
 				else:
+
 					if rootConcept.conceptTable[addValue.var] != addValue:
 						raise Exception("var '" + var + "' duplicated ")
+					self.relationLabelIsReentrance[-1] = True
+
 			else:
 				if isinstance(addValue, EmptyConcept):
 					rootConcept.conceptTable[addValue.var] = [addValue]
+					self.relationLabelIsReentrance[-1] = True
 				else:
 					rootConcept.conceptTable[addValue.var] = addValue
 
@@ -87,7 +107,9 @@ class Concept(object):
 		return None
 	
 	@classmethod
-	def parse(cls, parsingString, startIdx = 0, parentConcept = None):
+	def parse(cls, parsingString, startIdx = 0, parentConcept = None, ParseClass = None):
+		if ParseClass == None:
+			ParseClass = cls
 		variable = ""
 		name = ""
 
@@ -109,16 +131,19 @@ class Concept(object):
 				if variable == "":
 					raise Exception("format error: %s" % parsingString[startIdx:idx+1])
 
-		def assignValue():
+		def assignValue(value):
 			if valueStart:
 				# add new value to concept table
 				if relationName == "":
 					raise Exception("format error: %s" % parsingString[startIdx:idx+1])
 
 				if relationName == "mode":
+					if (value[0] == '"' and value[-1] == '"') or (value[0] == "'" and value[-1] == "'"):
+						value = value[1:-1]
+
 					if value not in ["imperative", "interrogative", "expressive"]:
 						raise Exception("parsing error: the property of mode error: %s" % parsingString[startIdx:idx+1])
-					rConcept.addRelation(relationName, value)
+					rConcept.addRelation(relationName, Constant(value, rConcept))
 				elif Concept.varMatchPattern.match(value):
 					tConcept = rConcept
 					while tConcept.getParent() != None:
@@ -131,7 +156,7 @@ class Concept(object):
 						rConcept.addRelation(relationName, addedConcept)
 				else:
 					# string -> add
-					rConcept.addRelation(relationName, value)
+					rConcept.addRelation(relationName, Constant(value, rConcept))
 
 		while idx < len(parsingString):
 			tChar = parsingString[idx]
@@ -141,7 +166,7 @@ class Concept(object):
 					value += tChar
 					if len(value) > 0 and (value[0] == tChar and value[-2] != "\\"):
 					
-						assignValue()
+						assignValue(value)
 						valueStart = False
 						relationName = ""
 						value = ""
@@ -155,12 +180,12 @@ class Concept(object):
 					elif nameStart and name != "" and (not (variableStart or relationStart or valueStart)):
 						assignName()
 						nameStart = False
-						rConcept = cls(variable, name, parentConcept)
+						rConcept = ParseClass(variable, name, parentConcept)
 					elif relationStart and relationName != "" and (not (variableStart or nameStart or valueStart)):
 						relationStart = False
 					elif valueStart:
 						if len(value) > 0 and value[0] != '"' and value[0] != "'":
-							assignValue()
+							assignValue(value)
 							valueStart = False
 							relationName = ""
 							value = ""
@@ -172,7 +197,7 @@ class Concept(object):
 					if nameStart:
 						assignName()
 						nameStart = False
-						rConcept = cls(variable, name, parentConcept)
+						rConcept = ParseConcept(variable, name, parentConcept)
 					if relationStart:
 						relationStart = False
 
@@ -201,14 +226,14 @@ class Concept(object):
 						idx += 1
 						continue
 					else:
-						assignValue()
+						assignValue(value)
 						valueStart = False
 						relationName = ""
 						value = ""
 				if nameStart:
 					assignName()
 					nameStart = False
-					rConcept = cls(variable, name, parentConcept)
+					rConcept = ParseClass(variable, name, parentConcept)
 
 				if conceptStart == False:
 					raise Exception("un-match bracket: %s" % parsingString[startIdx:idx+1] )
@@ -237,11 +262,11 @@ class Concept(object):
 				if nameStart:
 					assignName()
 					nameStart = False
-					rConcept = cls(variable, name, parentConcept)
+					rConcept = ParseClass(variable, name, parentConcept)
 
 				if valueStart:
 					if value[0] == '"' and value[-1] == '"':
-						assignValue()
+						assignValue(value)
 						valueStart = False
 						relationName = ""
 						value = ""
@@ -341,21 +366,29 @@ class Concept(object):
 
 		try:
 			currentIdx = idxList[0]
-			relLabel = self.relationLabel[currentIdx]
+			(relIndex, relLabel, labelIdx, isReentrance) = [t for t in zip(xrange(len(self.relationLabel)), self.relationLabel, self.relationLabelIdx, self.relationLabelIsReentrance) if t[-1] == False][currentIdx]
 
 			nextConcept = None
 			if isinstance(self.relations[relLabel], list):
-				labelIdx = self.relationLabelIdx[currentIdx]
+				labelIdx = self.relationLabelIdx[relIndex]
 				nextConcept = self.relations[relLabel][labelIdx]
 			elif isinstance(self.relations[relLabel], Concept):
 				nextConcept = self.relations[relLabel]
-			else:
-				raise Exception("Item in relation table is neither list nor Concept: %s" % str(self.relations[relLabel]))
+			elif isinstance(self.relations[relLabel], Constant):
+				nextConcept = self.relations[relLabel]
+		#	else:
+		#		raise Exception("Item in relation table is neither list nor Concept: %s" % str(self.relations[relLabel]))
 		except KeyError:
 			raise Exception("Find Concept error in relation: %s" % str(idxList))
 		except:
+			print self.name
+			print currentIdx
+			print idxList
+			print self.relationLabel
+			print self.relationLabelIdx
 			exc_info = sys.exc_info()
 			raise exc_info[0], exc_info[1], exc_info[2]
+
 		if len(idxList) == 1:
 			return nextConcept
 		else:
@@ -364,26 +397,51 @@ class Concept(object):
 	def traverse(self, callerConcept = None):
 		Concept._traverseLevel += 1
 		#for relationName in self.relations:
-		for (relIdx, relationName) in enumerate(self.relationLabel):
 
-			labelIdx = self.relationLabelIdx[relIdx]
+
+
+		propagation = None
+		subPropagation = None
+
+		if hasattr(self, 'alignedDep'):
+			propagation = Set()
+			for depNode in self.alignedDep:
+				propagation = propagation | Set(depNode.wordSpan)
+		for (relIdx, (relationName, labelIdx, isReentrance)) in enumerate(zip(self.relationLabel, self.relationLabelIdx, self.relationLabelIsReentrance)):
+
+			#labelIdx = self.relationLabelIdx[relIdx]
 			value = self.relations[relationName][labelIdx] if isinstance(self.relations[relationName], list) else self.relations[relationName]
+			
+			subPropagation = None
+			if hasattr(value, 'alignedDep'):
+				subPropagation = Set()
+				for depNode in value.alignedDep:
+					subPropagation = subPropagation | Set(depNode.wordSpan)
 
-			traverseChild = True
 			if isinstance(value, Concept):
-				if not isinstance(value.parent, list) or (value.parent[0] == self):
-					traverseChild = False
+				traverseChild = False
+				if (not isinstance(value.parent, list)) or (value.parent[0] == self) and (not isReentrance):
+
 					for childValue in value.traverse(self):
 						traverseChild = True
+						
+						(a, childConcept, childReentrance, childPropagation) = childValue
+						if subPropagation != None and childPropagation != None and (not isinstance(childConcept.parent, list)) :
+							subPropagation = subPropagation | (childPropagation) 
 						yield childValue
 				else:
 					traverseChild = False
-				yield (relationName, value, traverseChild)
+				yield (relationName, value, isReentrance, subPropagation)
+			elif isinstance(value, Constant):
+				yield (relationName, value, False, subPropagation)
 			else:
-				yield (relationName, str(value), False)
+				raise
+
+			if subPropagation != None and propagation != None:
+				propagation = propagation | subPropagation
 		Concept._traverseLevel -= 1
 		if self.parent == None:
-			yield (None, self, True )
+			yield (None, self, False, propagation)
 		
 	def toString(self, callerConcept = None):
 		rStr = self.var
@@ -399,12 +457,17 @@ class Concept(object):
 				rStr += "\n" + "\t"*Concept._traverseLevel + ":%s " % (relationName)
 				if isinstance(value, Concept):
 					rStr += value.toString(self)
+				elif isinstance(value, Constant):
+					rStr += str(value.value)
 				else:
-					rStr += str(value)
+					raise
 			rStr += ")"
 		Concept._traverseLevel -= 1
 
 		return rStr
+
+	def inverseConcept(self):
+		print self.conceptTable
 			
 class EmptyConcept(Concept):
 	pass
@@ -417,7 +480,17 @@ class Expression(Concept):
 	@classmethod
 	def parse(cls, parseString):
 		parseString = parseString.strip()
-		rootConcept = Concept.parse(parseString)
-		rootConcept.casting()
+		rootConcept = Concept.parse(parseString, ParseClass = Expression)
+		#rootConcept.casting()
 		return rootConcept
+
+
 		
+class Constant(object):
+	def __init__(self, value, parentConcept):
+		self.conceptIdx = -1
+		self.value = value
+		self.parent = parentConcept
+	
+	def setConceptIdx(self, conceptIdx):
+		self.conceptIdx = conceptIdx
