@@ -473,19 +473,21 @@ class EmptyConcept(Concept):
 	pass
 
 
-class Expression(Concept):
-	def __init__(self, var, name, parentConcept = None):
-		pass
-	
+class Expression(object):
+	def __init__(rootConcept, rootConceptList = None):
+		self.rootConcept = rootConcept
+		if rootConceptList == None:
+			self.rootConceptList = [self.rootConcept]
+		else:
+			self.rootConceptList = self.rootConceptList
+
 	@classmethod
 	def parse(cls, parseString):
 		parseString = parseString.strip()
-		rootConcept = Concept.parse(parseString, ParseClass = Expression)
+		rootConcept = Concept.parse(parseString)
 		#rootConcept.casting()
-		return rootConcept
-
-
-		
+		return cls(rootConcept)
+	
 class Constant(object):
 	def __init__(self, value, parentConcept):
 		self.conceptIdx = -1
